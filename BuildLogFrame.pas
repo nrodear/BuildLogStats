@@ -3,6 +3,7 @@ unit BuildLogFrame;
 interface
 
 uses
+  Winapi.Windows,
   System.SysUtils, System.Classes, System.IniFiles, System.Types,
   System.Generics.Collections, System.Generics.Defaults,
   Vcl.Controls, Vcl.Forms, Vcl.StdCtrls, Vcl.ExtCtrls,
@@ -48,6 +49,11 @@ type
     dlgOpen:        TOpenDialog;
     mnuRecent:      TPopupMenu;
     btnRecent:      TButton;
+    cmbScope:       TComboBox;
+    btnBuild:       TButton;
+    pbBuild:        TProgressBar;
+    lblBuildScope:  TLabel;
+    lblBuildStatus: TLabel;
     procedure btnOpenClick(Sender: TObject);
     procedure btnClearClick(Sender: TObject);
     procedure btnRecentClick(Sender: TObject);
@@ -58,6 +64,7 @@ type
     procedure lvCodeResultDblClick(Sender: TObject);
     procedure lvCodeResultSelectItem(Sender: TObject; Item: TListItem; Selected: Boolean);
     procedure btnFromIDEClick(Sender: TObject);
+    procedure btnBuildClick(Sender: TObject);
   private
     FStats:       TBuildStats;
     FCodeRows:    TArray<TCodeRow>;
@@ -67,6 +74,8 @@ type
     FCodeSortAsc: Boolean;
     FCodeMsgs:    TArray<TBuildMessage>;
     FRecentFiles: TStringList;
+    function  RunMSBuild(const ATarget, AConfig, APlatform, ALogFile: string): Boolean;
+    procedure LoadCapturedLog;
     procedure LoadRecentFiles;
     procedure SaveRecentFiles;
     procedure AddRecentFile(const AFileName: string);
@@ -83,7 +92,7 @@ type
   public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
-    procedure LoadFromFile(const AFileName: string);
+    procedure LoadFromFile(const AFileName: string; AddToRecent: Boolean = True);
     procedure LoadFromCapture;
     procedure Clear;
   end;
@@ -249,6 +258,11 @@ end;
 
 procedure TBuildLogFrame.btnFromIDEClick(Sender: TObject);
 begin
+  LoadCapturedLog;
+end;
+
+procedure TBuildLogFrame.LoadCapturedLog;
+begin
   if GBuildCapture = nil then Exit;
 
   if GBuildCapture.Lines.Count = 0 then
@@ -291,7 +305,181 @@ begin
   end;
 end;
 
-procedure TBuildLogFrame.LoadFromFile(const AFileName: string);
+function TBuildLogFrame.RunMSBuild(const ATarget, AConfig, APlatform,
+  ALogFile: string): Boolean;
+var
+  BDS, RsVars, BatFile, CmdLine: string;
+  SL:       TStringList;
+  SI:       TStartupInfo;
+  PI:       TProcessInformation;
+  ExitCode: Cardinal;
+begin
+  Result := False;
+
+  BDS := GetEnvironmentVariable('BDS');
+  if BDS = '' then
+  begin
+    lblStatus.Caption := 'Umgebungsvariable BDS nicht gesetzt - kein RAD-Studio-Kontext.';
+    Exit;
+  end;
+  RsVars := IncludeTrailingPathDelimiter(BDS) + 'bin\rsvars.bat';
+  if not FileExists(RsVars) then
+  begin
+    lblStatus.Caption := 'rsvars.bat nicht gefunden: ' + RsVars;
+    Exit;
+  end;
+
+  { rsvars.bat setzt die MSBuild-Umgebung; /flp schreibt das vollstaendige Log
+    in eine Datei, die anschliessend geparst wird. Aufruf ueber eine temporaere
+    Batch-Datei, um das fragile cmd-Quoting zu vermeiden. }
+  BatFile := IncludeTrailingPathDelimiter(GetEnvironmentVariable('TEMP'))
+             + 'BuildLogStats_run.bat';
+  SL := TStringList.Create;
+  try
+    SL.Add('@echo off');
+    SL.Add(Format('call "%s"', [RsVars]));
+    SL.Add(Format('msbuild "%s" /t:Build /p:Config=%s /p:Platform=%s ' +
+      '/nologo /clp:NoSummary /flp:logfile="%s";Verbosity=normal;Encoding=UTF-8',
+      [ATarget, AConfig, APlatform, ALogFile]));
+    SL.SaveToFile(BatFile, TEncoding.ASCII);
+  finally
+    SL.Free;
+  end;
+
+  CmdLine := Format('cmd.exe /C "%s"', [BatFile]);
+  UniqueString(CmdLine);   { CreateProcessW darf den Puffer beschreiben }
+
+  FillChar(SI, SizeOf(SI), 0);
+  SI.cb          := SizeOf(SI);
+  SI.dwFlags     := STARTF_USESHOWWINDOW;
+  SI.wShowWindow := SW_HIDE;
+  FillChar(PI, SizeOf(PI), 0);
+
+  if not CreateProcess(nil, PChar(CmdLine), nil, nil, False, CREATE_NO_WINDOW,
+       nil, PChar(ExtractFilePath(ATarget)), SI, PI) then
+  begin
+    lblStatus.Caption := 'msbuild-Prozess konnte nicht gestartet werden.';
+    Exit;
+  end;
+  try
+    { Warten und dabei die Nachrichtenschleife bedienen, damit die UI
+      (inkl. Marquee-Progressbar) waehrend des Builds reagiert. }
+    while MsgWaitForMultipleObjects(1, PI.hProcess, False, INFINITE,
+            QS_ALLINPUT) = WAIT_OBJECT_0 + 1 do
+      Application.ProcessMessages;
+    if GetExitCodeProcess(PI.hProcess, ExitCode) then
+      Result := ExitCode = 0;
+  finally
+    CloseHandle(PI.hThread);
+    CloseHandle(PI.hProcess);
+    System.SysUtils.DeleteFile(BatFile);
+  end;
+end;
+
+procedure TBuildLogFrame.btnBuildClick(Sender: TObject);
+var
+  ModSvc:  IOTAModuleServices;
+  Group:   IOTAProjectGroup;
+  Proj:    IOTAProject;
+  Target:  string;
+  Cfg:     string;
+  Plat:    string;
+  LogFile: string;
+  OK:      Boolean;
+  I:       Integer;
+begin
+  if not Supports(BorlandIDEServices, IOTAModuleServices, ModSvc) then
+  begin
+    lblBuildStatus.Caption := 'ToolsAPI nicht verfuegbar.';
+    Exit;
+  end;
+
+  { Projektgruppe ermitteln (gleiche Methode wie in FindFileInProjectGroup) }
+  Group := nil;
+  for I := 0 to ModSvc.ModuleCount - 1 do
+    if Supports(ModSvc.Modules[I], IOTAProjectGroup, Group) then Break;
+  if Group = nil then
+  begin
+    lblBuildStatus.Caption := 'Kein Projekt / keine Projektgruppe geladen.';
+    Exit;
+  end;
+
+  Proj := Group.ActiveProject;
+  if Proj = nil then
+  begin
+    lblBuildStatus.Caption := 'Kein aktives Projekt.';
+    Exit;
+  end;
+
+  { Ziel je nach Scope: Einzelprojekt (.dproj) oder ganze Gruppe (.groupproj);
+    Config/Plattform aus dem aktiven Projekt = "eingestellte Variante". }
+  if cmbScope.ItemIndex = 1 then
+    Target := Group.FileName
+  else
+    Target := Proj.FileName;
+
+  Cfg  := Proj.CurrentConfiguration;
+  Plat := Proj.CurrentPlatform;
+  if Cfg  = '' then Cfg  := 'Debug';
+  if Plat = '' then Plat := 'Win32';
+
+  LogFile := IncludeTrailingPathDelimiter(GetEnvironmentVariable('TEMP'))
+             + 'BuildLogStats_build.log';
+  System.SysUtils.DeleteFile(LogFile);
+
+  OK                := False;
+  btnBuild.Enabled  := False;
+  Screen.Cursor     := crHourGlass;
+  lblStatus.Caption := '';
+  lblBuildStatus.Caption := Format('Baue %s (%s/%s) ...',
+    [ExtractFileName(Target), Cfg, Plat]);
+  try
+    try
+      pbBuild.Style := pbstMarquee;
+      OK := RunMSBuild(Target, Cfg, Plat, LogFile);
+    except
+      on E: Exception do
+      begin
+        OK := False;
+        lblStatus.Caption := 'Build-Fehler: ' + E.Message;
+      end;
+    end;
+  finally
+    pbBuild.Style    := pbstNormal;
+    pbBuild.Position := pbBuild.Max;
+    Screen.Cursor    := crDefault;
+    btnBuild.Enabled := True;
+  end;
+
+  if OK then
+    lblBuildStatus.Caption := 'Build erfolgreich - lade Log ...'
+  else
+    lblBuildStatus.Caption := 'Build fehlgeschlagen - lade Log (falls vorhanden) ...';
+
+  { Das von /flp geschriebene Log laden und auswerten - auch bei Fehlern,
+    damit Fehlermeldungen in der Statistik erscheinen. Nicht in die Recent-Liste.
+    Abgesichert, damit ein defektes Log nie die IDE crasht. }
+  try
+    if FileExists(LogFile) then
+    begin
+      LoadFromFile(LogFile, False);
+      { Edition-Sperre erkennen: msbuild/dcc verweigert Kommandozeilen-Build.
+        Als klaren Fehler in der (roten) Statuszeile ganz links melden. }
+      if Pos('does not support command line compiling', memoLog.Lines.Text) > 0 then
+      begin
+        lblStatus.Caption      := 'Fehler: kein Kommandozeilen-Compiler';
+        lblBuildStatus.Caption := 'Build nicht ausgefuehrt';
+      end;
+    end
+    else if lblStatus.Caption = '' then
+      lblStatus.Caption := 'Keine Log-Datei erzeugt: ' + LogFile;
+  except
+    on E: Exception do
+      lblStatus.Caption := 'Log-Auswertung fehlgeschlagen: ' + E.Message;
+  end;
+end;
+
+procedure TBuildLogFrame.LoadFromFile(const AFileName: string; AddToRecent: Boolean);
 begin
   Screen.Cursor := crHourGlass;
   try
@@ -303,7 +491,8 @@ begin
     end;
 
     FStats.ParseFile(AFileName);
-    AddRecentFile(AFileName);
+    if AddToRecent then
+      AddRecentFile(AFileName);
     ShowStats;
     BuildCodeRows;
     ApplySortAndFill;

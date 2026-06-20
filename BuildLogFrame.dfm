@@ -8,7 +8,7 @@ object BuildLogFrame: TBuildLogFrame
     Left = 0
     Top = 0
     Width = 800
-    Height = 33
+    Height = 60
     Align = alTop
     BevelOuter = bvNone
     TabOrder = 0
@@ -60,16 +60,57 @@ object BuildLogFrame: TBuildLogFrame
       TabOrder = 3
       OnClick = btnFromIDEClick
     end
+    object lblBuildScope: TLabel
+      Left = 8
+      Top = 37
+      Width = 24
+      Height = 15
+      Caption = 'Ziel:'
+    end
+    object lblBuildStatus: TLabel
+      Left = 514
+      Top = 37
+      Width = 3
+      Height = 15
+    end
+    object cmbScope: TComboBox
+      Left = 44
+      Top = 33
+      Width = 100
+      Height = 23
+      Style = csDropDownList
+      TabOrder = 4
+      Items.Strings = (
+        'Projekt'
+        'Gruppe')
+      ItemIndex = 0
+    end
+    object btnBuild: TButton
+      Left = 150
+      Top = 33
+      Width = 90
+      Height = 23
+      Caption = 'Bauen'
+      TabOrder = 5
+      OnClick = btnBuildClick
+    end
+    object pbBuild: TProgressBar
+      Left = 248
+      Top = 35
+      Width = 258
+      Height = 18
+      TabOrder = 6
+    end
   end
   object pgcMain: TPageControl
     Left = 0
-    Top = 33
+    Top = 60
     Width = 800
-    Height = 465
+    Height = 438
     ActivePage = tsFehlercodes
     Align = alClient
     TabOrder = 1
-    ExplicitTop = 34
+    ExplicitTop = 60
     object tsCode: TTabSheet
       Caption = 'Code'
       object pnlCodeFilter: TPanel
@@ -304,6 +345,19 @@ object BuildLogFrame: TBuildLogFrame
       Height = 15
       Font.Charset = DEFAULT_CHARSET
       Font.Color = clRed
+      Font.Height = -12
+      Font.Name = 'Segoe UI'
+      Font.Style = []
+      ParentFont = False
+    end
+    object lblErrorSummary: TLabel
+      Left = 520
+      Top = 4
+      Width = 3
+      Height = 15
+      Anchors = [akTop, akRight]
+      Font.Charset = DEFAULT_CHARSET
+      Font.Color = clWindowText
       Font.Height = -12
       Font.Name = 'Segoe UI'
       Font.Style = []

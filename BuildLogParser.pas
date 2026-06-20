@@ -171,7 +171,13 @@ begin
   Clear;
   Lines := TStringList.Create;
   try
-    Lines.LoadFromFile(AFileName, TEncoding.UTF8);
+    { UTF-8 bevorzugen (IDE-/MSBuild-Logs), bei Dekodierfehlern auf das
+      automatisch erkannte Encoding (BOM/ANSI) zurueckfallen. }
+    try
+      Lines.LoadFromFile(AFileName, TEncoding.UTF8);
+    except
+      Lines.LoadFromFile(AFileName);
+    end;
     ParseLines(Lines);
   finally
     Lines.Free;
