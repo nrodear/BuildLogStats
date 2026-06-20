@@ -1,0 +1,24 @@
+# Zeilenenden normalisieren; Standard automatisch erkennen
+* text=auto
+
+# Delphi-Quell- und Projektdateien: im Working Tree CRLF (Windows-Toolchain)
+*.pas   text eol=crlf
+*.dpk   text eol=crlf
+*.dpr   text eol=crlf
+*.dproj text eol=crlf
+*.groupproj text eol=crlf
+*.inc   text eol=crlf
+*.dfm   text eol=crlf
+*.fmx   text eol=crlf
+*.rc    text eol=crlf
+*.md    text eol=crlf
+
+# Binärdateien
+*.res binary
+*.bpl binary
+*.dcu binary
+*.dcp binary
+*.ico binary
+*.bmp binary
+*.png binary
+*.jpg binary

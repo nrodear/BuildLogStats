@@ -1,0 +1,41 @@
+package BuildLogStats;
+
+{$R *.res}
+{$ALIGN 8}
+{$ASSERTIONS ON}
+{$BOOLEVAL OFF}
+{$DEBUGINFO OFF}
+{$EXTENDEDSYNTAX ON}
+{$IMPORTEDDATA ON}
+{$IOCHECKS ON}
+{$LOCALSYMBOLS ON}
+{$LONGSTRINGS ON}
+{$OPENSTRINGS ON}
+{$OPTIMIZATION OFF}
+{$OVERFLOWCHECKS OFF}
+{$RANGECHECKS OFF}
+{$REFERENCEINFO ON}
+{$SAFEDIVIDE OFF}
+{$STACKFRAMES ON}
+{$TYPEDADDRESS OFF}
+{$VARSTRINGCHECKS ON}
+{$WRITEABLECONST OFF}
+{$MINENUMSIZE 1}
+{$IMAGEBASE $400000}
+{$DESCRIPTION 'Build Log IDE Fenster Plugin'}
+{$IMPLICITBUILD OFF}
+
+requires
+  rtl,
+  vcl,
+  designide;
+
+contains
+  BuildLogParser  in 'BuildLogParser.pas',
+  BuildLogHints   in 'BuildLogHints.pas',
+  BuildLogCapture in 'BuildLogCapture.pas',
+  BuildLogFrame   in 'BuildLogFrame.pas'  {BuildLogFrame: TFrame},
+  BuildLogIDEWin  in 'BuildLogIDEWin.pas',
+  BuildLogReg     in 'BuildLogReg.pas';
+
+end.
