@@ -1,5 +1,7 @@
 # BuildLogStats
 
+**Version 0.0.1**
+
 Ein **Delphi-IDE-Plugin** (RAD Studio 12 / Delphi 12) das nach jedem Build
 automatisch das Compiler-Log einsammelt und in einem **dockbaren Werkzeugfenster**
 als übersichtliche Statistik aufbereitet: Fehler, Warnungen, Hinweise, häufigste
