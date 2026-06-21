@@ -123,7 +123,7 @@ end;
 
 function TBuildLogDockHelper.GetCaption: string;
 begin
-  Result := 'Build Log';
+  Result := 'Build Log Stats';
 end;
 
 function TBuildLogDockHelper.GetFrameClass: TCustomFrameClass;

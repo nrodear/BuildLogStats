@@ -70,7 +70,7 @@ begin
     GMenuAction := TBuildLogMenuAction.Create;
 
   Item         := TMenuItem.Create(nil);
-  Item.Caption := '&Build Log';
+  Item.Caption := '&Build Log Stats';
   Item.Name    := 'miBuildLog';
   Item.OnClick := GMenuAction.OnMenuClick;
   ViewMenu.Add(Item);

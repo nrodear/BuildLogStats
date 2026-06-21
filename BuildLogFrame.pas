@@ -457,12 +457,13 @@ begin
     lblBuildStatus.Caption := 'Build fehlgeschlagen - lade Log (falls vorhanden) ...';
 
   { Das von /flp geschriebene Log laden und auswerten - auch bei Fehlern,
-    damit Fehlermeldungen in der Statistik erscheinen. Nicht in die Recent-Liste.
+    damit Fehlermeldungen in der Statistik erscheinen.
     Abgesichert, damit ein defektes Log nie die IDE crasht. }
   try
     if FileExists(LogFile) then
     begin
-      LoadFromFile(LogFile, False);
+      { Build-Log auch in die "Zuletzt geoeffnet"-Liste aufnehmen. }
+      LoadFromFile(LogFile, True);
       { Edition-Sperre erkennen: msbuild/dcc verweigert Kommandozeilen-Build.
         Als klaren Fehler in der (roten) Statuszeile ganz links melden. }
       if Pos('does not support command line compiling', memoLog.Lines.Text) > 0 then
